@@ -24,7 +24,7 @@
 #endif
 
 #include <Wire.h>
-#include <LIS3DH.h>
+#include "LIS3DH.h"
 
 
 /**************************************************************************/
@@ -33,49 +33,22 @@
 */
 /**************************************************************************/
 // I2C
-Adafruit_LIS3DH::Adafruit_LIS3DH()
-  : _cs(-1), _mosi(-1), _miso(-1), _sck(-1), _sensorID(-1)
-{
-}
+LIS3DH LIS3DH::create() { return LIS3DH(); }
 
-Adafruit_LIS3DH::Adafruit_LIS3DH(int8_t cspin)
-  : _cs(cspin), _mosi(-1), _miso(-1), _sck(-1), _sensorID(-1)
-{ }
-
-Adafruit_LIS3DH::Adafruit_LIS3DH(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin)
-  : _cs(cspin), _mosi(mosipin), _miso(misopin), _sck(sckpin), _sensorID(-1)
-{ }
-
-
+#ifndef __AVR_ATtiny85__
+LIS3DH LIS3DH::create(int8_t cspin) { return LIS3DH_SPI(cspin); };
+LIS3DH LIS3DH::create(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin)
+{ return LIS3DH_SPI( cspin,  mosipin,  misopin,  sckpin); }
+#endif
 
 /**************************************************************************/
 /*!
     @brief  Setups the HW (reads coefficients values, etc.)
 */
 /**************************************************************************/
-bool Adafruit_LIS3DH::begin(uint8_t i2caddr) {
-  _i2caddr = i2caddr;
+bool LIS3DH::begin(uint8_t i2caddr) {
 
-
-  if (_cs == -1) {
-    // i2c
-    Wire.begin();
-  } else {
-    digitalWrite(_cs, HIGH);
-    pinMode(_cs, OUTPUT);
-
-#ifndef __AVR_ATtiny85__
-    if (_sck == -1) {
-      // hardware SPI
-      SPI.begin();
-    } else {
-      // software SPI
-      pinMode(_sck, OUTPUT);
-      pinMode(_mosi, OUTPUT);
-      pinMode(_miso, INPUT);
-    }
-#endif
-  }
+  beginSerial(i2caddr);
 
   /*
   for (uint8_t i=0; i<0x30; i++) {
@@ -123,37 +96,8 @@ bool Adafruit_LIS3DH::begin(uint8_t i2caddr) {
 }
 
 
-void Adafruit_LIS3DH::read(void) {
-  // read x y z at once
-
-  if (_cs == -1) {
-    // i2c
-    Wire.beginTransmission(_i2caddr);
-    Wire.write(LIS3DH_REG_OUT_X_L | 0x80); // 0x80 for autoincrement
-    Wire.endTransmission();
-
-    Wire.requestFrom(_i2caddr, 6);
-    x = Wire.read(); x |= ((uint16_t)Wire.read()) << 8;
-    y = Wire.read(); y |= ((uint16_t)Wire.read()) << 8;
-    z = Wire.read(); z |= ((uint16_t)Wire.read()) << 8;
-  } 
-  #ifndef __AVR_ATtiny85__
-  else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(LIS3DH_REG_OUT_X_L | 0x80 | 0x40); // read multiple, bit 7&6 high
-
-    x = spixfer(); x |= ((uint16_t)spixfer()) << 8;
-    y = spixfer(); y |= ((uint16_t)spixfer()) << 8;
-    z = spixfer(); z |= ((uint16_t)spixfer()) << 8;
-
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-
-  }
-  #endif
+void LIS3DH::read(void) {
+  readSerial();
   uint8_t range = getRange();
   uint16_t divider = 1;
   if (range == LIS3DH_RANGE_16_G) divider = 1365; // different sensitivity at 16g
@@ -173,38 +117,14 @@ void Adafruit_LIS3DH::read(void) {
 */
 /**************************************************************************/
 
-int16_t Adafruit_LIS3DH::readADC(uint8_t adc) {
+int16_t LIS3DH::readADC(uint8_t adc) {
   if ((adc < 1) || (adc > 3)) return 0;
-  uint16_t value;
 
   adc--;
 
   uint8_t reg = LIS3DH_REG_OUTADC1_L + adc*2;
 
-  if (_cs == -1) {
-    // i2c
-    Wire.beginTransmission(_i2caddr);
-    Wire.write(reg | 0x80);   // 0x80 for autoincrement
-    Wire.endTransmission();
-    Wire.requestFrom(_i2caddr, 2);
-    value = Wire.read();  value |= ((uint16_t)Wire.read()) << 8;
-  } 
-  #ifndef __AVR_ATtiny85__
-  else {
-    if (_sck == -1)
-      SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-    digitalWrite(_cs, LOW);
-    spixfer(reg | 0x80 | 0x40); // read multiple, bit 7&6 high
-
-    value = spixfer(); value |= ((uint16_t)spixfer()) << 8;
-
-    digitalWrite(_cs, HIGH);
-    if (_sck == -1)
-      SPI.endTransaction();              // release the SPI bus
-  }
-  #endif
-
-  return value;
+  return readADCSerial(reg);
 }
 
 
@@ -214,7 +134,7 @@ int16_t Adafruit_LIS3DH::readADC(uint8_t adc) {
 */
 /**************************************************************************/
 
-void Adafruit_LIS3DH::setClick(uint8_t c, uint8_t clickthresh, uint8_t timelimit, uint8_t timelatency, uint8_t timewindow) {
+void LIS3DH::setClick(uint8_t c, uint8_t clickthresh, uint8_t timelimit, uint8_t timelatency, uint8_t timewindow) {
   if (!c) {
     //disable int
     uint8_t r = readRegister8(LIS3DH_REG_CTRL3);
@@ -240,7 +160,7 @@ void Adafruit_LIS3DH::setClick(uint8_t c, uint8_t clickthresh, uint8_t timelimit
   writeRegister8(LIS3DH_REG_TIMEWINDOW, timewindow); // arbitrary
 }
 
-uint8_t Adafruit_LIS3DH::getClick(void) {
+uint8_t LIS3DH::getClick(void) {
   return readRegister8(LIS3DH_REG_CLICKSRC);
 }
 
@@ -250,7 +170,7 @@ uint8_t Adafruit_LIS3DH::getClick(void) {
     @brief  Sets the g range for the accelerometer
 */
 /**************************************************************************/
-void Adafruit_LIS3DH::setRange(lis3dh_range_t range)
+void LIS3DH::setRange(lis3dh_range_t range)
 {
   uint8_t r = readRegister8(LIS3DH_REG_CTRL4);
   r &= ~(0x30);
@@ -263,7 +183,7 @@ void Adafruit_LIS3DH::setRange(lis3dh_range_t range)
     @brief  Sets the g range for the accelerometer
 */
 /**************************************************************************/
-lis3dh_range_t Adafruit_LIS3DH::getRange(void)
+lis3dh_range_t LIS3DH::getRange(void)
 {
   /* Read the data format register to preserve bits */
   return (lis3dh_range_t)((readRegister8(LIS3DH_REG_CTRL4) >> 4) & 0x03);
@@ -274,7 +194,7 @@ lis3dh_range_t Adafruit_LIS3DH::getRange(void)
     @brief  Sets the data rate for the LIS3DH (controls power consumption)
 */
 /**************************************************************************/
-void Adafruit_LIS3DH::setDataRate(lis3dh_dataRate_t dataRate)
+void LIS3DH::setDataRate(lis3dh_dataRate_t dataRate)
 {
   uint8_t ctl1 = readRegister8(LIS3DH_REG_CTRL1);
   ctl1 &= ~(0xF0); // mask off bits
@@ -287,22 +207,24 @@ void Adafruit_LIS3DH::setDataRate(lis3dh_dataRate_t dataRate)
     @brief  Sets the data rate for the LIS3DH (controls power consumption)
 */
 /**************************************************************************/
-lis3dh_dataRate_t Adafruit_LIS3DH::getDataRate(void)
+lis3dh_dataRate_t LIS3DH::getDataRate(void)
 {
   return (lis3dh_dataRate_t)((readRegister8(LIS3DH_REG_CTRL1) >> 4)& 0x0F);
 }
+
+#ifndef __AVR_ATtiny85__
 
 /**************************************************************************/
 /*!
     @brief  Gets the most recent sensor event
 */
 /**************************************************************************/
-bool Adafruit_LIS3DH::getEvent(sensors_event_t *event) {
+bool LIS3DH::getEvent(sensors_event_t *event) {
   /* Clear the event */
   memset(event, 0, sizeof(sensors_event_t));
 
   event->version   = sizeof(sensors_event_t);
-  event->sensor_id = _sensorID;
+  event->sensor_id = 0;  //_sensorID;
   event->type      = SENSOR_TYPE_ACCELEROMETER;
   event->timestamp = 0;
 
@@ -318,7 +240,7 @@ bool Adafruit_LIS3DH::getEvent(sensors_event_t *event) {
     @brief  Gets the sensor_t data
 */
 /**************************************************************************/
-void Adafruit_LIS3DH::getSensor(sensor_t *sensor) {
+void LIS3DH::getSensor(sensor_t *sensor) {
   /* Clear the sensor_t object */
   memset(sensor, 0, sizeof(sensor_t));
 
@@ -326,7 +248,7 @@ void Adafruit_LIS3DH::getSensor(sensor_t *sensor) {
   strncpy (sensor->name, "LIS3DH", sizeof(sensor->name) - 1);
   sensor->name[sizeof(sensor->name)- 1] = 0;
   sensor->version     = 1;
-  sensor->sensor_id   = _sensorID;
+  sensor->sensor_id   = 0;//_sensorID;
   sensor->type        = SENSOR_TYPE_ACCELEROMETER;
   sensor->min_delay   = 0;
   sensor->max_value   = 0;
@@ -334,14 +256,152 @@ void Adafruit_LIS3DH::getSensor(sensor_t *sensor) {
   sensor->resolution  = 0;
 }
 
+#endif
 
+
+
+
+// LIS3DH_I2C
+LIS3DH::LIS3DH() {} 
+bool LIS3DH::beginSerial(uint8_t i2caddr) {
+  _i2caddr = i2caddr;
+    // i2c
+  Wire.begin();
+  return true;
+}
+/**************************************************************************/
+/*!
+    @brief  Reads 8-bits from the specified register
+*/
+/**************************************************************************/
+uint8_t LIS3DH::readRegister8(uint8_t reg) {
+  uint8_t value;
+
+  Wire.beginTransmission(_i2caddr);
+  Wire.write((uint8_t)reg);
+  Wire.endTransmission();
+
+  Wire.requestFrom(_i2caddr, 1);
+  value = Wire.read();
+
+  return value;
+}
+/**************************************************************************/
+/*!
+    @brief  Writes 8-bits to the specified destination register
+*/
+/**************************************************************************/
+void LIS3DH::writeRegister8(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission((uint8_t)_i2caddr);
+    Wire.write((uint8_t)reg);
+    Wire.write((uint8_t)value);
+    Wire.endTransmission();
+}
+void LIS3DH::readSerial(void) {
+  // read x y z at once
+
+    // i2c
+    Wire.beginTransmission(_i2caddr);
+    Wire.write(LIS3DH_REG_OUT_X_L | 0x80); // 0x80 for autoincrement
+    Wire.endTransmission();
+
+    Wire.requestFrom(_i2caddr, 6);
+    x = Wire.read(); x |= ((uint16_t)Wire.read()) << 8;
+    y = Wire.read(); y |= ((uint16_t)Wire.read()) << 8;
+    z = Wire.read(); z |= ((uint16_t)Wire.read()) << 8;
+
+}
+
+/**************************************************************************/
+/*!
+    @brief  Read the auxilary ADC
+*/
+/**************************************************************************/
+
+int16_t LIS3DH::readADCSerial(uint8_t reg) {
+
+  uint16_t value;
+
+  // i2c
+  Wire.beginTransmission(_i2caddr);
+  Wire.write(reg | 0x80);   // 0x80 for autoincrement
+  Wire.endTransmission();
+  Wire.requestFrom(_i2caddr, 2);
+  value = Wire.read();  value |= ((uint16_t)Wire.read()) << 8;
+  return value;
+}
+
+
+
+
+#ifndef __AVR_ATtiny85__
+// LIS3DH_SPI
+LIS3DH_SPI::LIS3DH_SPI(int8_t cspin)
+  : _cs(cspin), _mosi(-1), _miso(-1), _sck(-1)
+{ }
+
+
+LIS3DH_SPI::LIS3DH_SPI(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin)
+  : _cs(cspin), _mosi(mosipin), _miso(misopin), _sck(sckpin)
+{ }
+
+bool LIS3DH_SPI::beginSerial(uint8_t i2caddr) {
+
+  digitalWrite(_cs, HIGH);
+  pinMode(_cs, OUTPUT);
+
+  if (_sck == -1) {
+    // hardware SPI
+    SPI.begin();
+  } else {
+    // software SPI
+    pinMode(_sck, OUTPUT);
+    pinMode(_mosi, OUTPUT);
+    pinMode(_miso, INPUT);
+  }
+  return true;
+}
+/**************************************************************************/
+/*!
+    @brief  Reads 8-bits from the specified register
+*/
+/**************************************************************************/
+uint8_t LIS3DH_SPI::readRegister8(uint8_t reg) {
+  uint8_t value;
+
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg | 0x80); // read, bit 7 high
+  value = spixfer(0);
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
+  
+  return value;
+}
+/**************************************************************************/
+/*!
+    @brief  Writes 8-bits to the specified destination register
+*/
+/**************************************************************************/
+void LIS3DH_SPI::writeRegister8(uint8_t reg, uint8_t value) {
+  if (_sck == -1)
+    SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  digitalWrite(_cs, LOW);
+  spixfer(reg & ~0x80); // write, bit 7 low
+  spixfer(value);
+  digitalWrite(_cs, HIGH);
+  if (_sck == -1)
+    SPI.endTransaction();              // release the SPI bus
+}
 /**************************************************************************/
 /*!
     @brief  Low level SPI
 */
 /**************************************************************************/
 
-uint8_t Adafruit_LIS3DH::spixfer(uint8_t x) {
+uint8_t LIS3DH_SPI::spixfer(uint8_t x) {
   #ifndef __AVR_ATtiny85__
   if (_sck == -1)
     return SPI.transfer(x);
@@ -360,61 +420,46 @@ uint8_t Adafruit_LIS3DH::spixfer(uint8_t x) {
   return reply;
   #endif
 }
+void LIS3DH_SPI::readSerial(void) {
+  // read x y z at once
 
-
-/**************************************************************************/
-/*!
-    @brief  Writes 8-bits to the specified destination register
-*/
-/**************************************************************************/
-void Adafruit_LIS3DH::writeRegister8(uint8_t reg, uint8_t value) {
-  if (_cs == -1) {
-    Wire.beginTransmission((uint8_t)_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.write((uint8_t)value);
-    Wire.endTransmission();
-  } 
-  #ifndef __AVR_ATtiny85__
-  else {
     if (_sck == -1)
       SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
     digitalWrite(_cs, LOW);
-    spixfer(reg & ~0x80); // write, bit 7 low
-    spixfer(value);
+    spixfer(LIS3DH_REG_OUT_X_L | 0x80 | 0x40); // read multiple, bit 7&6 high
+
+    x = spixfer(); x |= ((uint16_t)spixfer()) << 8;
+    y = spixfer(); y |= ((uint16_t)spixfer()) << 8;
+    z = spixfer(); z |= ((uint16_t)spixfer()) << 8;
+
     digitalWrite(_cs, HIGH);
     if (_sck == -1)
       SPI.endTransaction();              // release the SPI bus
-  }
-  #endif
+
+
 }
 
 /**************************************************************************/
 /*!
-    @brief  Reads 8-bits from the specified register
+    @brief  Read the auxilary ADC
 */
 /**************************************************************************/
-uint8_t Adafruit_LIS3DH::readRegister8(uint8_t reg) {
-  uint8_t value;
 
-  if (_cs == -1) {
-    Wire.beginTransmission(_i2caddr);
-    Wire.write((uint8_t)reg);
-    Wire.endTransmission();
-
-    Wire.requestFrom(_i2caddr, 1);
-    value = Wire.read();
-  }  
-  #ifndef __AVR_ATtiny85__
-  else {
+int16_t LIS3DH_SPI::readADCSerial(uint8_t reg) {
+  uint16_t value;
     if (_sck == -1)
       SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
     digitalWrite(_cs, LOW);
-    spixfer(reg | 0x80); // read, bit 7 high
-    value = spixfer(0);
+    spixfer(reg | 0x80 | 0x40); // read multiple, bit 7&6 high
+
+    value = spixfer(); value |= ((uint16_t)spixfer()) << 8;
+
     digitalWrite(_cs, HIGH);
     if (_sck == -1)
       SPI.endTransaction();              // release the SPI bus
-  }
-  #endif
+
   return value;
 }
+
+
+#endif

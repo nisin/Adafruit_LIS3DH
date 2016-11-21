@@ -16,6 +16,8 @@
     v1.0  - First release
 */
 /**************************************************************************/
+#ifndef _LIS3DH_H
+#define _LIS3DH_H
 
 #if ARDUINO >= 100
  #include "Arduino.h"
@@ -26,8 +28,8 @@
 #include <Wire.h>
 #ifndef __AVR_ATtiny85__
   #include <SPI.h>
+  #include <Adafruit_Sensor.h>
 #endif
-#include <Adafruit_Sensor.h>
 
 /*=========================================================================
     I2C ADDRESS/BITS
@@ -104,13 +106,21 @@ typedef enum
 
 } lis3dh_dataRate_t;
 
-class Adafruit_LIS3DH : public Adafruit_Sensor {
+#ifndef __AVR_ATtiny85__
+class LIS3DH : public Adafruit_Sensor {
+#else
+class LIS3DH {
+#endif
+
  public:
-  Adafruit_LIS3DH(void);
-  Adafruit_LIS3DH(int8_t cspin);
-  Adafruit_LIS3DH(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin);
-  
-  bool       begin(uint8_t addr = LIS3DH_DEFAULT_ADDRESS);
+  static LIS3DH LIS3DH::create();
+  LIS3DH();
+
+#ifndef __AVR_ATtiny85__
+  static LIS3DH LIS3DH::create(int8_t cspin);
+  static LIS3DH LIS3DH::create(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin);
+#endif  
+  bool begin(uint8_t addr = LIS3DH_DEFAULT_ADDRESS);
 
   void read();
   int16_t readADC(uint8_t a);
@@ -121,10 +131,11 @@ class Adafruit_LIS3DH : public Adafruit_Sensor {
   void setDataRate(lis3dh_dataRate_t dataRate);
   lis3dh_dataRate_t getDataRate(void);
 
+#ifndef __AVR_ATtiny85__
   bool getEvent(sensors_event_t *event);
   void getSensor(sensor_t *sensor);
-
-  uint8_t getOrientation(void);
+#endif
+//  uint8_t getOrientation(void);
 
   void setClick(uint8_t c, uint8_t clickthresh, uint8_t timelimit = 10, uint8_t timelatency = 20, uint8_t timewindow = 255);
   uint8_t getClick(void);
@@ -132,16 +143,45 @@ class Adafruit_LIS3DH : public Adafruit_Sensor {
   int16_t x, y, z;
   float x_g, y_g, z_g;
 
- private:
   
-  uint8_t readRegister8(uint8_t reg);
-  void writeRegister8(uint8_t reg, uint8_t value);
-  uint8_t spixfer(uint8_t x = 0xFF);
+#ifdef __AVR_ATtiny85__
+#define VIRTUAL_WO_ATtiny85
+  private:
+#else
+#define VIRTUAL_WO_ATtiny85 virtual
+  protected:
+#endif
+  VIRTUAL_WO_ATtiny85 bool beginSerial(uint8_t addr = LIS3DH_DEFAULT_ADDRESS);
+  VIRTUAL_WO_ATtiny85 uint8_t readRegister8(uint8_t reg);
+  VIRTUAL_WO_ATtiny85 void writeRegister8(uint8_t reg, uint8_t value);
+  VIRTUAL_WO_ATtiny85 void readSerial();
+  VIRTUAL_WO_ATtiny85 int16_t readADCSerial(uint8_t reg);
 
-
-  int32_t _sensorID;
+  // int32_t _sensorID=0;
   int8_t  _i2caddr;
 
-  // SPI
-  int8_t _cs, _mosi, _miso, _sck;
 };
+
+
+#ifndef __AVR_ATtiny85__
+
+class LIS3DH_SPI : public LIS3DH {
+  public:
+  LIS3DH_SPI(int8_t cspin);
+  LIS3DH_SPI(int8_t cspin, int8_t mosipin, int8_t misopin, int8_t sckpin);
+
+  protected:
+  bool beginSerial(uint8_t addr = LIS3DH_DEFAULT_ADDRESS);
+  uint8_t readRegister8(uint8_t reg);
+  void writeRegister8(uint8_t reg, uint8_t value);
+  void readSerial();
+  int16_t readADCSerial(uint8_t reg);
+  // SPI
+  uint8_t spixfer(uint8_t x = 0xFF);
+  int8_t _cs, _mosi, _miso, _sck;
+
+};
+
+#endif
+
+#endif
