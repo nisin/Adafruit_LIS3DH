@@ -1,6 +1,6 @@
 /**************************************************************************/
 /*!
-    @file     Adafruit_LIS3DH.cpp
+    @file     LIS3DH.cpp
     @author   K. Townsend / Limor Fried (Adafruit Industries)
     @license  BSD (see license.txt)
 
@@ -24,7 +24,7 @@
 #endif
 
 #include <Wire.h>
-#include <Adafruit_LIS3DH.h>
+#include <LIS3DH.h>
 
 
 /**************************************************************************/
