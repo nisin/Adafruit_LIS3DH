@@ -106,6 +106,11 @@ typedef enum
 
 } lis3dh_dataRate_t;
 
+typedef union {
+  int16_t sens;
+  int8_t rude;
+} gval_t;
+
 #ifndef __AVR_ATtiny85__
 class LIS3DH : public Adafruit_Sensor {
 #else
@@ -125,31 +130,34 @@ class LIS3DH {
   void read();
   int16_t readADC(uint8_t a);
 
+
   void setRange(lis3dh_range_t range);
   lis3dh_range_t getRange(void);
 
   void setDataRate(lis3dh_dataRate_t dataRate);
   lis3dh_dataRate_t getDataRate(void);
 
-#ifndef __AVR_ATtiny85__
-  bool getEvent(sensors_event_t *event);
-  void getSensor(sensor_t *sensor);
-#endif
 //  uint8_t getOrientation(void);
 
   void setClick(uint8_t c, uint8_t clickthresh, uint8_t timelimit = 10, uint8_t timelatency = 20, uint8_t timewindow = 255);
   uint8_t getClick(void);
 
-  int16_t x, y, z;
-  float x_g, y_g, z_g;
+  uint8_t newDataAvailable();
+  int arrival();
+  void setFreeFall();
+  uint8_t getFreeFall();
 
+  gval_t x, y, z;
+  float x_g, y_g, z_g;
   
 #ifdef __AVR_ATtiny85__
 #define VIRTUAL_WO_ATtiny85
   private:
 #else
-#define VIRTUAL_WO_ATtiny85 virtual
+    bool getEvent(sensors_event_t *event);
+    void getSensor(sensor_t *sensor);
   protected:
+#define VIRTUAL_WO_ATtiny85 virtual
 #endif
   VIRTUAL_WO_ATtiny85 bool beginSerial(uint8_t addr = LIS3DH_DEFAULT_ADDRESS);
   VIRTUAL_WO_ATtiny85 uint8_t readRegister8(uint8_t reg);
@@ -159,7 +167,6 @@ class LIS3DH {
 
   // int32_t _sensorID=0;
   int8_t  _i2caddr;
-
 };
 
 

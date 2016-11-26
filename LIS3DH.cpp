@@ -63,7 +63,7 @@ bool LIS3DH::begin(uint8_t i2caddr) {
   if (deviceid != 0x33)
   {
     /* No LIS3DH detected ... return false */
-    //Serial.println(deviceid, HEX);
+//    Serial.println(deviceid, HEX);
     return false;
   }
 
@@ -82,7 +82,11 @@ bool LIS3DH::begin(uint8_t i2caddr) {
   //writeRegister8(LIS3DH_REG_PL_CFG, 0x40);
 
   // enable adcs
-  writeRegister8(LIS3DH_REG_TEMPCFG, 0x80);
+  // writeRegister8(LIS3DH_REG_TEMPCFG, 0x80);
+  
+  // enable fifo -> mode stream  
+  writeRegister8(LIS3DH_REG_CTRL5, 0x40);
+  writeRegister8(LIS3DH_REG_FIFOCTRL, 0x80);
 
   /*
   for (uint8_t i=0; i<0x30; i++) {
@@ -105,9 +109,9 @@ void LIS3DH::read(void) {
   if (range == LIS3DH_RANGE_4_G) divider = 8190;
   if (range == LIS3DH_RANGE_2_G) divider = 16380;
 
-  x_g = (float)x / divider;
-  y_g = (float)y / divider;
-  z_g = (float)z / divider;
+  x_g = (float)x.sens / divider;
+  y_g = (float)y.sens / divider;
+  z_g = (float)z.sens / divider;
 
 }
 
@@ -258,7 +262,16 @@ void LIS3DH::getSensor(sensor_t *sensor) {
 
 #endif
 
-
+// NEW DATA AVAILABLE
+uint8_t LIS3DH::newDataAvailable() {
+  uint8_t status = readRegister8(LIS3DH_REG_STATUS2) & 0x0F;
+  return status;
+}
+// FIFO BUF CHECK
+int LIS3DH::arrival() {
+  uint8_t fifosrc = readRegister8(LIS3DH_REG_FIFOSRC) & 0x1F;
+  return (int)fifosrc; 
+}
 
 
 // LIS3DH_I2C
@@ -279,7 +292,7 @@ uint8_t LIS3DH::readRegister8(uint8_t reg) {
 
   Wire.beginTransmission(_i2caddr);
   Wire.write((uint8_t)reg);
-  Wire.endTransmission();
+  Wire.endTransmission(false);
 
   Wire.requestFrom(_i2caddr, 1);
   value = Wire.read();
@@ -303,12 +316,12 @@ void LIS3DH::readSerial(void) {
     // i2c
     Wire.beginTransmission(_i2caddr);
     Wire.write(LIS3DH_REG_OUT_X_L | 0x80); // 0x80 for autoincrement
-    Wire.endTransmission();
+    Wire.endTransmission(false);
 
     Wire.requestFrom(_i2caddr, 6);
-    x = Wire.read(); x |= ((uint16_t)Wire.read()) << 8;
-    y = Wire.read(); y |= ((uint16_t)Wire.read()) << 8;
-    z = Wire.read(); z |= ((uint16_t)Wire.read()) << 8;
+    x.sens = Wire.read(); x.sens |= ((uint16_t)Wire.read()) << 8;
+    y.sens = Wire.read(); y.sens |= ((uint16_t)Wire.read()) << 8;
+    z.sens = Wire.read(); z.sens |= ((uint16_t)Wire.read()) << 8;
 
 }
 
@@ -428,9 +441,9 @@ void LIS3DH_SPI::readSerial(void) {
     digitalWrite(_cs, LOW);
     spixfer(LIS3DH_REG_OUT_X_L | 0x80 | 0x40); // read multiple, bit 7&6 high
 
-    x = spixfer(); x |= ((uint16_t)spixfer()) << 8;
-    y = spixfer(); y |= ((uint16_t)spixfer()) << 8;
-    z = spixfer(); z |= ((uint16_t)spixfer()) << 8;
+    x.sens = spixfer(); x.sens |= ((uint16_t)spixfer()) << 8;
+    y.sens = spixfer(); y.sens |= ((uint16_t)spixfer()) << 8;
+    z.sens = spixfer(); z.sens |= ((uint16_t)spixfer()) << 8;
 
     digitalWrite(_cs, HIGH);
     if (_sck == -1)
