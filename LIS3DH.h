@@ -108,7 +108,10 @@ typedef enum
 
 typedef union {
   int16_t sens;
-  int8_t rude;
+  struct {
+    uint8_t dummy;
+    int8_t rude;
+  };
 } gval_t;
 
 #ifndef __AVR_ATtiny85__
